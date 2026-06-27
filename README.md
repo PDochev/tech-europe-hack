@@ -171,13 +171,7 @@ schedule (cron, Vercel Cron, GitHub Actions, or just repeated `curl`).
 4. **Tunnel:** `ngrok http 3000` → copy the https URL.
 5. **Provision the SLNG agent** so its `book_meeting`/`call_end` webhooks hit the tunnel:
    `AGENT_WEBHOOK_BASE_URL=https://<ngrok> npx tsx scripts/provision-slng-agent.ts` → set `SLNG_AGENT_ID`.
-6. **Fire a cycle:**
-   ```bash
-   curl -X POST https://<ngrok>/api/agent/run \
-     -H "authorization: Bearer $DISPATCH_API_KEY" \
-     -H 'content-type: application/json' \
-     -d '{"phone_override":"+44YOURPHONE"}'
-   ```
+
    The agent calls, books a meeting, and the `call_end` webhook advances the deal in Attio.
    For a recurring loop, hit that endpoint on a timer.
 
@@ -186,8 +180,7 @@ schedule (cron, Vercel Cron, GitHub Actions, or just repeated `curl`).
 1. Open the dashboard — it mirrors the Attio pipeline, including a stale deal.
 2. Hit **Run agent** → the timeline lights up: top pick chosen (Gemini) → call script drafted (Gemini).
 3. A teammate's phone rings live (SLNG); the agent qualifies the lead and books a meeting.
-4. The transcript is summarized and the **Attio record updates itself** — stage advanced, note added,
-   next step set. No human touched it.
+4. **Attio record updates itself** — stage advanced, note added, next step set. No human touched it.
 
 ## Reset test data
 
