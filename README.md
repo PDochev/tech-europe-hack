@@ -140,14 +140,14 @@ under `n8n/` during the build), wire up the credentials above, and copy the webh
 
 The calling agent lives in `lib/` and `app/api/`:
 
-| File | Purpose |
-| --- | --- |
-| `lib/slng.ts` | Typed client for the SLNG Voice Agents API (create/replace agent, dispatch call, get call) |
-| `lib/autocloser-agent.ts` | The AutoCloser agent definition — system prompt + `book_meeting` tool + `call_end` transcript webhook |
-| `scripts/provision-slng-agent.ts` | Creates/updates the agent in SLNG |
-| `app/api/agent/dispatch` | POST → dispatch an outbound call |
-| `app/api/webhooks/slng/book-meeting` | The in-call LLM calls this when it secures a meeting |
-| `app/api/webhooks/slng/call-end` | SLNG posts the transcript here when the call ends (write-back point) |
+| File                                 | Purpose                                                                                               |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `lib/slng.ts`                        | Typed client for the SLNG Voice Agents API (create/replace agent, dispatch call, get call)            |
+| `lib/autocloser-agent.ts`            | The AutoCloser agent definition — system prompt + `book_meeting` tool + `call_end` transcript webhook |
+| `scripts/provision-slng-agent.ts`    | Creates/updates the agent in SLNG                                                                     |
+| `app/api/agent/dispatch`             | POST → dispatch an outbound call                                                                      |
+| `app/api/webhooks/slng/book-meeting` | The in-call LLM calls this when it secures a meeting                                                  |
+| `app/api/webhooks/slng/call-end`     | SLNG posts the transcript here when the call ends (write-back point)                                  |
 
 **1. Configure telephony.** In the SLNG dashboard → Telephony, set up an outbound SIP trunk /
 phone number and copy the trunk id into `SLNG_OUTBOUND_TRUNK_ID`.
@@ -191,11 +191,11 @@ delivers the transcript. Write-back to Attio is stubbed (`writeOutcomeToAttio`) 
 
 The agent loop is exposed as HTTP so both the dashboard and n8n can drive it:
 
-| Endpoint | Auth | Purpose |
-| --- | --- | --- |
-| `GET /api/agent/candidates` | none (read-only) | Deal pipeline, stalest first, + suggested next pick |
-| `POST /api/agent/run` | `Bearer DISPATCH_API_KEY` | One autonomous cycle: pick stalest deal → mark `calling` in Attio → place the SLNG call |
-| `POST /api/agent/dispatch` | `Bearer DISPATCH_API_KEY` | Lower-level: call a specific number with explicit context |
+| Endpoint                    | Auth                      | Purpose                                                                                 |
+| --------------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
+| `GET /api/agent/candidates` | none (read-only)          | Deal pipeline, stalest first, + suggested next pick                                     |
+| `POST /api/agent/run`       | `Bearer DISPATCH_API_KEY` | One autonomous cycle: pick stalest deal → mark `calling` in Attio → place the SLNG call |
+| `POST /api/agent/dispatch`  | `Bearer DISPATCH_API_KEY` | Lower-level: call a specific number with explicit context                               |
 
 `POST /api/agent/run` accepts an optional body: `{ "record_id": "...", "phone_override": "+44...", "talking_points": "..." }`.
 Use `phone_override` to route the demo call to a real (teammate) phone while keeping the deal's context.

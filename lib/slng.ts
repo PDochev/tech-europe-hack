@@ -23,6 +23,8 @@ export interface SlngModels {
   llm: string;
   tts: string;
   tts_voice: string;
+  /** Provider-specific LLM params passed through (e.g. gpt-oss reasoning_effort). */
+  llm_kwargs?: Record<string, unknown>;
 }
 
 /** A tool the in-call LLM can invoke, or a system-triggered webhook. */

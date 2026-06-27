@@ -131,9 +131,13 @@ export function buildAutoCloserAgent(
       // These exact ids/tags are what the SLNG API accepts (the docs enum was
       // stale — note the ":latest" tag and the "multi" STT). Override via env.
       stt: process.env.SLNG_AGENT_STT ?? "slng/deepgram/nova:3-multi",
-      llm: process.env.SLNG_AGENT_LLM ?? "bedrock-mantle/nvidia.nemotron-super-3-120b:latest",
+      // GPT-OSS 120B on Groq is the lowest-latency LLM available on this tier.
+      llm: process.env.SLNG_AGENT_LLM ?? "groq/openai/gpt-oss-120b:latest",
       tts: process.env.SLNG_AGENT_TTS ?? "slng/deepgram/aura:2-en",
       tts_voice: process.env.SLNG_AGENT_TTS_VOICE ?? "aura-2-thalia-en",
+      // gpt-oss emits chain-of-thought by default; "low" slashes time-to-first-token
+      // so the agent starts speaking sooner on the call.
+      llm_kwargs: { reasoning_effort: "low" },
     },
     enable_interruptions: true,
     sip_outbound_trunk_id: opts.sipOutboundTrunkId,
