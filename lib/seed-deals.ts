@@ -13,8 +13,8 @@ function daysAgo(n: number): string {
 
 export const SEED_DEALS = [
   {
-    name: "Greenfield Health — Q1 trial",
-    stage: STAGES.contacted,
+    name: "Greenfield Health - Q1 trial",
+    stage: STAGES.new,
     contact_name: "Maria Alvarez",
     contact_phone: "+447700900123",
     company_name: "Greenfield Health",
@@ -24,7 +24,7 @@ export const SEED_DEALS = [
     last_activity: daysAgo(21), // stale → the demo target
   },
   {
-    name: "Acme Robotics — new inbound",
+    name: "Acme Robotics - new inbound",
     stage: STAGES.new,
     contact_name: "Tom Becker",
     contact_phone: "+447700900124",
@@ -34,8 +34,8 @@ export const SEED_DEALS = [
     last_activity: daysAgo(2),
   },
   {
-    name: "Nimbus Logistics — expansion",
-    stage: STAGES.contacted,
+    name: "Nimbus Logistics - expansion",
+    stage: STAGES.new,
     contact_name: "Priya Nair",
     contact_phone: "+447700900125",
     company_name: "Nimbus Logistics",
@@ -45,8 +45,8 @@ export const SEED_DEALS = [
     last_activity: daysAgo(14),
   },
   {
-    name: "Orbit Fintech — renewal risk",
-    stage: STAGES.contacted,
+    name: "Orbit Fintech - renewal risk",
+    stage: STAGES.new,
     contact_name: "Daniel Okafor",
     contact_phone: "+447700900126",
     company_name: "Orbit Fintech",
@@ -56,7 +56,7 @@ export const SEED_DEALS = [
     last_activity: daysAgo(30),
   },
   {
-    name: "Vertex Manufacturing — new inbound",
+    name: "Vertex Manufacturing - new inbound",
     stage: STAGES.new,
     contact_name: "Sofia Rossi",
     contact_phone: "+447700900127",

@@ -1,10 +1,13 @@
-# AutoCloser — Autonomous Voice SDR on Attio
+# AutoCloser - Autonomous Voice SDR on Attio
 
 An agentic CRM build for the **Attio "Agentic CRM"** hackathon track. AutoCloser is an autonomous
 agent that, on a schedule or a button press, picks the highest-priority lead/deal in **Attio**,
 has **Gemini** decide who to call and draft a script, places a **live phone call** through **SLNG**,
 books a meeting, and writes the outcome back to Attio — with no human in the loop. A thin **Next.js**
 dashboard shows it happening live.
+
+> An **SDR** (Sales Development Representative) is the outbound rep who works a list of leads, chases
+> stale ones, qualifies them on a call, and books meetings. AutoCloser automates that role end to end.
 
 > **North star:** can the agent close a deal without a human in the loop?
 
@@ -35,6 +38,57 @@ via a small Neon table and writes the outcome to Attio.
 [Neon](https://neon.tech) (Postgres) is used as infrastructure — it stores call run-state so the
 `dispatch → book_meeting → call_end` webhooks (three separate requests) correlate to the right deal.
 Not a judged partner tech.
+
+> **Attio track fit.** AutoCloser is the _Proactive Relationship Agent_ direction: it monitors pipeline
+> staleness, decides who needs attention, acts (a live call), and logs the outcome back to Attio —
+> the autonomous loop, no human in the loop. The north star ("close a deal without a human in the
+> loop") is the literal flow: stale deal → booked meeting on the calendar, written to the CRM by the agent.
+
+## What we used from each platform
+
+Maps every external capability the project relies on (for jury evaluation).
+
+### Attio — via the **REST API (v2)** · `lib/attio.ts`, `lib/deal.ts`
+
+- **Objects & attributes (schema as code):** creates a custom `ac_deals` object and its attributes
+  (`stage`, `contact_name`, `contact_phone`, `company_name`, `agent_status`, `last_call_outcome`,
+  `next_step`, `meeting_time`, `last_activity`) — `createObject` / `createAttribute` (`scripts/setup-attio.ts`).
+- **Records:** `createRecord` (seed deals), `queryRecords` (pipeline, stalest-first via
+  `listDealsByStaleness` / `pickNextDeal`), `updateRecord` (mark `calling`, then write the outcome:
+  stage → **Meeting Booked**, `agent_status: done`, `meeting_time`), `deleteRecord` (test reset).
+- **Notes:** `createNote` — attaches the Gemini call summary + transcript to the deal.
+- **Auth:** `Authorization: Bearer ATTIO_API_KEY`; base `https://api.attio.com/v2/`.
+
+> **Why the REST API (not Attio MCP or Workflows)?** AutoCloser runs fully **headless** on its own
+> schedule, outside any user session or in-app surface — so it needs direct programmatic control of the
+> entire loop (define the schema, query the pipeline, write back records + notes) from our own
+> orchestrator. The REST API gives exactly that with nothing else in the path. Attio MCP and Workflows
+> are the right entry points when a human or an in-Attio agent drives the action; our model is the
+> opposite — no human in the loop — so the REST API is the cleanest fit.
+
+### SLNG — **Voice Agents API** · `lib/slng.ts`, `lib/autocloser-agent.ts`
+
+- **Agent lifecycle:** `createAgent` / `replaceAgent` / `getAgent` (`/agents`), `dispatchCall`
+  (`/agents/{id}/calls`), `getCall` (transcript, tool executions, status — also our debugging window).
+- **In-call stack (configurable):** Deepgram Nova STT, Deepgram Aura TTS, Groq GPT-OSS-120B LLM.
+- **Agent tools:** built-in `current_datetime`, template `hangup`, an LLM-invoked **`book_meeting`**
+  webhook, and a system-triggered **`call_end`** webhook (event `call_end`) — both bearer-authed with
+  `webhook_format: raw`.
+- **Per-call personalization:** Handlebars template variables (`contact_name`, `company_name`,
+  `deal_summary`, `talking_points`) injected at dispatch.
+
+### Gemini (Google DeepMind) · `lib/gemini.ts`, `lib/agent-brain.ts`
+
+- **Model `gemini-2.5-flash`** via `generateContent` (v1beta), `x-goog-api-key` header,
+  `systemInstruction` + `temperature`.
+- **Two reasoning steps around the call:** talking-points generation before dialing (per-deal, fed into
+  the SLNG prompt) and the post-call summary (written into the Attio note). Both best-effort with
+  graceful fallbacks so the autonomous loop never blocks on enrichment.
+
+### Neon (infrastructure) · `lib/db.ts`, `lib/call-store.ts`
+
+- Postgres `ac_calls` table correlating the `dispatch → book_meeting → call_end` webhooks to the right
+  Attio deal and the booked slot. Accessed via the `@neondatabase/serverless` HTTP driver.
 
 ---
 
@@ -234,3 +288,61 @@ in the `ac_deals` object (and their notes) before re-seeding, so only run it aga
 
 To also clear the call run-state, run `DELETE FROM ac_calls;` in the Neon SQL editor (a fresh call
 otherwise just adds a new row).
+
+---
+
+## 2-minute video demo — what to say & show
+
+Record with Loom (or similar). Aim for ~2:00. Two halves: **explain the solution** (~40s) and a
+**live walkthrough** (~80s). Have everything pre-staged so nothing is dead air.
+
+### Before you hit record (pre-flight)
+
+- Reset to clean data: `set -a && source .env.local && set +a && npx tsx scripts/reset-attio.ts`,
+  and `DELETE FROM ac_calls;` in Neon.
+- `ngrok http 3000` running, SLNG agent provisioned against that URL, `npm run dev` up.
+- Tabs open and arranged: **(1)** the dashboard, **(2)** the Attio deal you'll target, **(3)** your
+  phone visible (or a teammate's) to show it ringing. Optionally **(4)** the Neon `ac_calls` table.
+- Use a `phone_override` to your own phone so the call connects reliably on camera.
+
+### The script
+
+**0:00–0:15 — Hook + problem.**
+"This is AutoCloser, an autonomous voice SDR built on Attio. SDRs spend hours chasing stale leads.
+AutoCloser does the whole loop itself — picks the lead, calls them, books the meeting, and updates
+the CRM. No human in the loop."
+
+**0:15–0:40 — How it works (show the architecture diagram or dashboard).**
+Name the four pieces and what each does:
+
+- **Attio** is the system of record (deals, stages, notes).
+- **Gemini** prioritizes which deal to call and drafts the talking points.
+- **SLNG** places the real phone call and runs the live conversation.
+- The outcome is written **back into Attio** automatically; **Neon** correlates the call's webhooks.
+
+**0:40–1:50 — Live walkthrough (the money shot).**
+
+1. Show the dashboard / pipeline with a **stale deal** highlighted as the top pick.
+2. Click **Run agent** (or fire `POST /api/agent/run`). Narrate: "Gemini just picked the stalest deal
+   and drafted the script."
+3. **Your phone rings on camera** — answer it. Have a short scripted exchange and **agree a meeting
+   time** ("next Thursday at 6pm works"). Let the agent confirm and hang up.
+4. Cut to **Attio** and refresh the deal: stage flips to **Meeting Booked**, `agent_status: done`,
+   **Meeting time** is set, and a **summary note** is attached. Say: "No human touched this record."
+5. (Optional, 5s) Show the Neon `ac_calls` row with the captured `meeting_iso8601` to prove the
+   correlation is real.
+
+**1:50–2:00 — Close.**
+"From a stale deal to a booked meeting on the calendar — fully autonomous, end to end, on Attio.
+That's AutoCloser."
+
+### Tips
+
+- Keep the phone exchange short and rehearsed; the meeting booking is the climax, so make the
+  before/after in Attio unmistakable (split screen or quick cut).
+- If a live call is risky, pre-record the call portion and narrate over it — but the Attio
+  before→after must be shown live, since that's the judged "agent closes without a human" moment.
+- State the partner tech by name (Attio, SLNG, Gemini) — it helps with track/side-challenge judging.
+- Drop one line on the deliberate choice: "We built on Attio's **REST API** because the agent is fully
+  headless — no human in the loop — so it needs direct programmatic control of the whole loop." Judges
+  note intentional entry-point choices (MCP / Workflows / REST API / App SDK).
