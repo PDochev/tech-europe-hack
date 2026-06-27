@@ -21,7 +21,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://YOUR-NGROK-SUBDOMAIN.ngrok-free.app/api/agent/run",
+        "url": " https://eosinic-sharri-unhatched.ngrok-free.dev/api/agent/run",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

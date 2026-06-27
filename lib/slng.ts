@@ -13,7 +13,10 @@
 const AGENTS_BASE_URL =
   process.env.SLNG_AGENTS_BASE_URL ?? "https://api.agents.slng.ai/v1";
 
-export type SlngRegion = "us-east" | "eu-central" | "ap-south";
+// "any" lets SLNG place the agent on any available worker (what the dashboard
+// "Any (EU worker)" option sends). The us-east/eu-central/ap-south values from
+// the docs are region-pinned and gate model availability.
+export type SlngRegion = "any" | "us-east" | "eu-central" | "ap-south";
 
 export interface SlngModels {
   stt: string;

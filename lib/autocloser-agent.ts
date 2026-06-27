@@ -124,11 +124,14 @@ export function buildAutoCloserAgent(
     system_prompt: SYSTEM_PROMPT,
     greeting: GREETING,
     language: "en",
-    region: opts.region ?? "eu-central",
+    // "any" (not a pinned region) is what makes the models below available on
+    // the hobby tier — verified by reading a dashboard-created agent's config.
+    region: opts.region ?? "any",
     models: {
-      stt: process.env.SLNG_AGENT_STT ?? "slng/deepgram/nova:3-en",
-      // Region-dependent. groq/openai/gpt-oss-120b is us-only; Bedrock works in eu-central.
-      llm: process.env.SLNG_AGENT_LLM ?? "bedrock-mantle/nvidia.nemotron-nano-3-30b",
+      // These exact ids/tags are what the SLNG API accepts (the docs enum was
+      // stale — note the ":latest" tag and the "multi" STT). Override via env.
+      stt: process.env.SLNG_AGENT_STT ?? "slng/deepgram/nova:3-multi",
+      llm: process.env.SLNG_AGENT_LLM ?? "bedrock-mantle/nvidia.nemotron-super-3-120b:latest",
       tts: process.env.SLNG_AGENT_TTS ?? "slng/deepgram/aura:2-en",
       tts_voice: process.env.SLNG_AGENT_TTS_VOICE ?? "aura-2-thalia-en",
     },
