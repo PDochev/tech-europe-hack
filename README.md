@@ -38,43 +38,45 @@ via a small Neon table and writes the outcome to Attio.
 [Twilio](https://twilio.com) supplies the outbound phone number, wired into SLNG's telephony as the
 caller ID. Both are infrastructure (not judged partner tech) and have no code in the repo.
 
-## What we used from each platform
+## What I used from each platform
 
-### Attio - via the **REST API (v2)** · `lib/attio.ts`, `lib/deal.ts`
+### Attio - the CRM and source of truth · via the REST API (v2)
 
-- **Objects & attributes (schema as code):** creates a custom `ac_deals` object and its attributes
-  (`stage`, `contact_name`, `contact_phone`, `company_name`, `agent_status`, `last_call_outcome`,
-  `next_step`, `meeting_time`, `last_activity`) - `createObject` / `createAttribute` (`scripts/setup-attio.ts`).
-- **Records:** `createRecord` (seed deals), `queryRecords` (pipeline, stalest-first via
-  `listDealsByStaleness` / `pickNextDeal`), `updateRecord` (mark `calling`, then write the outcome:
-  stage → **Meeting Booked**, `agent_status: done`, `meeting_time`), `deleteRecord` (test reset).
-- **Notes:** `createNote` - attaches the Gemini call summary + transcript to the deal.
+- **The pipeline lives in Attio.** I create a custom _Deals_ object (with fields like stage, contact,
+  company, agent status, meeting time, and last activity) and seed it with sample deals.
+- **The agent reads it** to find the deal that's gone coldest (stalest first).
+- **The agent writes back to it:** it marks a deal as _calling_ before dialing, then after the call
+  advances the stage to **Meeting Booked**, sets the meeting time, and records the outcome.
+- **It leaves a paper trail** by attaching a written call summary as a note on the deal.
 
-### SLNG — **Voice Agents API** · `lib/slng.ts`, `lib/autocloser-agent.ts`
+_Code: `lib/attio.ts`, `lib/deal.ts`, `scripts/setup-attio.ts`._
 
-- **Agent lifecycle:** `createAgent` / `replaceAgent` / `getAgent` (`/agents`), `dispatchCall`
-  (`/agents/{id}/calls`), `getCall` (transcript, tool executions, status).
-- **In-call stack (configurable):** Deepgram Nova STT, Deepgram Aura TTS, Groq GPT-OSS-120B LLM.
-- **Agent tools:** built-in `current_datetime`, template `hangup`, an LLM-invoked **`book_meeting`**
-  webhook, and a system-triggered **`call_end`** webhook (event `call_end`) - both bearer-authed with
-  `webhook_format: raw`.
-- **Per-call personalization:** Handlebars template variables (`contact_name`, `company_name`,
-  `deal_summary`, `talking_points`) injected at dispatch.
+### SLNG - the live phone call · Voice Agents API
 
-### Gemini (Google DeepMind) · `lib/gemini.ts`, `lib/agent-brain.ts`
+- **SLNG makes the actual call.** I defined a reusable voice agent (its persona, goals, and greeting)
+  and ask SLNG to dial a number; SLNG runs the real-time conversation — hearing the prospect, thinking,
+  and speaking back (speech-to-text → in-call LLM → text-to-speech).
+- **It books the meeting mid-call.** The agent has a "book meeting" action it triggers the moment the
+  prospect agrees a time, which I capture and save to Attio.
+- **It tells me when the call ends**, which is my cue to write the result back to the CRM.
+- **Every call is personalized** with the contact's name, company, and Gemini-drafted talking points.
 
-- **Model `gemini-2.5-flash`** via `generateContent` (v1beta), `x-goog-api-key` header,
-  `systemInstruction` + `temperature`.
-- **Two reasoning steps around the call:** talking-points generation before dialing (per-deal, fed into
-  the SLNG prompt) and the post-call summary (written into the Attio note). Both best-effort with
-  graceful fallbacks so the autonomous loop never blocks on enrichment.
+_Code: `lib/slng.ts`, `lib/autocloser-agent.ts`. (Voice powered by Deepgram speech models + a Groq LLM.)_
+
+### Gemini (Google DeepMind) - the agent's brain around the call
+
+- **Before the call:** picks the angle and drafts tailored talking points for the chosen deal.
+- **After the call:** writes the summary that gets saved as the Attio note.
+- Both steps fall back gracefully, so enrichment never blocks the autonomous loop.
+
+_Code: `lib/gemini.ts`, `lib/agent-brain.ts` (model: `gemini-2.5-flash`)._
 
 ### Neon (infrastructure) · `lib/db.ts`, `lib/call-store.ts`
 
 - Postgres `ac_calls` table correlating the `dispatch → book_meeting → call_end` webhooks to the right
   Attio deal and the booked slot. Accessed via the `@neondatabase/serverless` HTTP driver.
 
-### Twilio (infrastructure) — telephony number
+### Twilio (infrastructure) - telephony number
 
 - Provides the outbound **phone number** purchased in the Twilio console. It's connected to SLNG's
   telephony (outbound SIP trunk) so SLNG places real PSTN calls from it — the number SLNG dials _from_.
