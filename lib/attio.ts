@@ -175,6 +175,11 @@ export async function queryRecords(
   return res.data;
 }
 
+/** Permanently deletes a record (and its notes). */
+export async function deleteRecord(object: string, recordId: string): Promise<void> {
+  await request(`/objects/${object}/records/${recordId}`, { method: "DELETE" });
+}
+
 // --- Notes -----------------------------------------------------------------
 
 export async function createNote(input: {

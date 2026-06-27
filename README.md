@@ -232,6 +232,22 @@ n8n Cloud can't reach `localhost`, and SLNG must reach your webhooks — so expo
 4. The transcript is summarized and the **Attio record updates itself** — stage advanced, note added,
    next step set. No human touched it.
 
+## Reset test data
+
+After a test run the deals carry call state (stage `Meeting Booked`, `agent_status: done`, a note, etc.).
+To wipe and re-seed a clean 5-deal pipeline:
+
+```bash
+set -a && source .env.local && set +a && npx tsx scripts/reset-attio.ts
+```
+
+(`set -a … set +a` exports the vars from `.env.local` so the script sees `ATTIO_API_KEY`; equivalently
+`npx tsx --env-file=.env.local scripts/reset-attio.ts`.) This is **destructive** — it deletes every record
+in the `ac_deals` object (and their notes) before re-seeding, so only run it against a test workspace.
+
+To also clear the call run-state, run `DELETE FROM ac_calls;` in the Neon SQL editor (a fresh call
+otherwise just adds a new row).
+
 ## Status
 
 Early hackathon build. Setup/registration is documented above; the n8n workflow, Supabase schema, and
