@@ -3,13 +3,11 @@
 An agentic CRM build for the **Attio "Agentic CRM"** hackathon track. AutoCloser is an autonomous
 agent that, on a schedule or a button press, picks the highest-priority lead/deal in **Attio**,
 has **Gemini** decide who to call and draft a script, places a **live phone call** through **SLNG**,
-books a meeting, and writes the outcome back to Attio — with no human in the loop. A thin **Next.js**
+books a meeting, and writes the outcome back to Attio - with no human in the loop. A thin **Next.js**
 dashboard shows it happening live.
 
 > An **SDR** (Sales Development Representative) is the outbound rep who works a list of leads, chases
 > stale ones, qualifies them on a call, and books meetings. AutoCloser automates that role end to end.
-
-> **North star:** can the agent close a deal without a human in the loop?
 
 ## Architecture
 
@@ -29,15 +27,14 @@ via a small Neon table and writes the outcome to Attio.
 
 ## Partner technologies
 
-| Service                                           | Role in AutoCloser                          | Side challenge |
-| ------------------------------------------------- | ------------------------------------------- | -------------- |
-| [Attio](https://attio.com)                        | CRM, system of record, write-back target    | Track prize    |
-| [SLNG](https://slng.ai)                           | Outbound voice call to the lead             | LEGO           |
-| [Gemini / Google DeepMind](https://ai.google.dev) | Prioritize, decide, draft script, summarize | —              |
+| Service                                           | Role in AutoCloser                          |
+| ------------------------------------------------- | ------------------------------------------- |
+| [Attio](https://attio.com)                        | CRM, system of record, write-back target    |
+| [SLNG](https://slng.ai)                           | Outbound voice call to the lead             |
+| [Gemini / Google DeepMind](https://ai.google.dev) | Prioritize, decide, draft script, summarize |
 
 [Neon](https://neon.tech) (Postgres) is used as infrastructure — it stores call run-state so the
 `dispatch → book_meeting → call_end` webhooks (three separate requests) correlate to the right deal.
-Not a judged partner tech.
 
 > **Attio track fit.** AutoCloser is the _Proactive Relationship Agent_ direction: it monitors pipeline
 > staleness, decides who needs attention, acts (a live call), and logs the outcome back to Attio —
