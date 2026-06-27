@@ -208,10 +208,7 @@ export default function Dashboard() {
                 {deals.map((d) => {
                   const isNext = d.recordId === nextId;
                   return (
-                    <tr
-                      key={d.recordId}
-                      className={isNext ? "bg-emerald-500/5" : undefined}
-                    >
+                    <tr key={d.recordId}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 font-medium text-zinc-900">
                           {d.name}
