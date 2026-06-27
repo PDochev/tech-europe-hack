@@ -11,7 +11,7 @@ import { generateTalkingPoints } from "./agent-brain";
 import { AGENT_STATUS } from "./deal-schema";
 import { dispatchCall, SlngError } from "./slng";
 import { recordDispatch } from "./call-store";
-import { destinationAllowed, isE164 } from "./phone";
+import { destinationAllowed, isE164, normalizePhone } from "./phone";
 
 export interface RunOptions {
   recordId?: string;
@@ -54,7 +54,7 @@ export async function runAgentCycle(opts: RunOptions = {}): Promise<RunResult> {
     return { status: "idle", httpStatus: 200, reason: "no actionable deal" };
   }
 
-  const phone = opts.phoneOverride?.trim() || deal.contactPhone;
+  const phone = normalizePhone(opts.phoneOverride?.trim() || deal.contactPhone);
   if (!isE164(phone)) {
     return {
       status: "error",

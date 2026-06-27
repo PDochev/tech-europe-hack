@@ -1,5 +1,10 @@
 /** E.164 validation + the optional toll-fraud destination allowlist. */
 
+/** Strip spaces, hyphens, dots and parens so "+44 7555 174731" → "+447555174731". */
+export function normalizePhone(phone: string): string {
+  return phone.replace(/[\s().-]/g, "");
+}
+
 export function isE164(phone: string): boolean {
   return /^\+[1-9]\d{6,14}$/.test(phone);
 }
