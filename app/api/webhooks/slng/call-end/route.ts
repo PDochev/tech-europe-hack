@@ -5,8 +5,7 @@
  * booking captured mid-call, then push the outcome to Attio.
  */
 import {
-  attachMeeting,
-  consumePendingBooking,
+  finalizeCall,
   findByPhone,
   getCallRecord,
   type CallRecord,
@@ -20,7 +19,16 @@ interface CallEndBody {
   call_id?: string;
   phone_number?: string;
   call_end_reason?: string;
-  transcript?: Array<{ role: string; message: string }>;
+  // SLNG sends transcript entries as { role, text }; older shapes use `message`.
+  transcript?: Array<{ role: string; text?: string; message?: string }>;
+}
+
+/** Normalise SLNG transcript entries to the { role, message } shape we store. */
+function normalizeTranscript(
+  raw: CallEndBody["transcript"],
+): Array<{ role: string; message: string }> | undefined {
+  if (!raw) return undefined;
+  return raw.map((t) => ({ role: t.role, message: t.message ?? t.text ?? "" }));
 }
 
 export async function POST(request: Request) {
@@ -35,21 +43,25 @@ export async function POST(request: Request) {
     return Response.json({ error: "invalid JSON" }, { status: 400 });
   }
 
-  const rec =
-    (body.call_id ? getCallRecord(body.call_id) : undefined) ??
-    (body.phone_number ? findByPhone(body.phone_number) : undefined);
+  let rec =
+    (body.call_id ? await getCallRecord(body.call_id) : undefined) ??
+    (body.phone_number ? await findByPhone(body.phone_number) : undefined);
 
   if (!rec) {
-    // Unknown call (e.g. dev server restarted, in-memory store cleared).
+    // Unknown call (e.g. dispatched before the store was wired up).
     console.warn("[call-end] no CallRecord for", body.call_id, body.phone_number);
     return Response.json({ status: "ignored", reason: "unknown call" });
   }
 
-  rec.transcript = body.transcript;
-  rec.endReason = body.call_end_reason;
-
-  const booking = consumePendingBooking();
-  if (booking && body.call_id) attachMeeting(body.call_id, booking);
+  // Persist transcript + end reason; the returned row carries any meeting that
+  // book_meeting attached mid-call.
+  const transcript = normalizeTranscript(body.transcript);
+  const finalized = await finalizeCall(rec.callId, transcript, body.call_end_reason);
+  rec = finalized ?? {
+    ...rec,
+    transcript,
+    endReason: body.call_end_reason,
+  };
 
   await writeOutcomeToAttio(rec);
 

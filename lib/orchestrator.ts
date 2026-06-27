@@ -90,7 +90,7 @@ export async function runAgentCycle(opts: RunOptions = {}): Promise<RunResult> {
       },
     });
 
-    recordDispatch({
+    await recordDispatch({
       callId: result.call_id,
       phoneNumber: phone,
       attioRecordId: deal.recordId,

@@ -44,6 +44,11 @@ export type SlngTool =
       timeout_seconds?: number;
       wait_for_response?: boolean;
       show_results_to_llm?: boolean;
+      /**
+       * Request body shape. "raw" sends just the flat arguments object (what our
+       * handlers parse); "envelope" (SLNG's default) wraps args in metadata.
+       */
+      webhook_format?: "raw" | "envelope";
       llm_result_instructions?: string;
       /** Present for system-triggered (call_end etc.) webhooks. */
       source?: "system";

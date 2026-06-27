@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       arguments: args,
     });
 
-    recordDispatch({
+    await recordDispatch({
       callId: result.call_id,
       phoneNumber: body.phone_number,
       attioRecordId: body.attio_record_id,

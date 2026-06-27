@@ -5,7 +5,7 @@
  *
  * The JSON we return is read back to the LLM so it can confirm to the prospect.
  */
-import { setPendingBooking } from "@/lib/call-store";
+import { attachBookingToActiveCall } from "@/lib/call-store";
 import { isAuthorized } from "@/lib/webhook-auth";
 
 interface BookMeetingBody {
@@ -40,7 +40,16 @@ export async function POST(request: Request) {
     );
   }
 
-  setPendingBooking({ iso8601: when.toISOString(), notes: body.notes });
+  const rec = await attachBookingToActiveCall({
+    iso8601: when.toISOString(),
+    notes: body.notes,
+  });
+
+  if (!rec) {
+    // No live call to attach to — still confirm to the prospect; the call_end
+    // webhook will write the outcome even without a stored meeting.
+    console.warn("[book-meeting] no active call to attach booking to");
+  }
 
   return Response.json({
     status: "booked",

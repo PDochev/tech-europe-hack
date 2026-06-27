@@ -88,6 +88,10 @@ export function buildAutoCloserAgent(
         required: ["meeting_iso8601"],
       },
       auth: { type: "bearer", token: opts.webhookSecret },
+      // "raw" → body is the flat { meeting_iso8601, notes } the route reads.
+      // (Without this, SLNG's "envelope" default wraps the args and the route
+      // sees meeting_iso8601 as undefined.)
+      webhook_format: "raw",
       timeout_seconds: 10,
       wait_for_response: true,
       llm_result_instructions:
@@ -97,9 +101,25 @@ export function buildAutoCloserAgent(
       type: "webhook",
       id: TOOL_IDS.callEnd,
       name: "post_call_transcript",
-      description: "Send the transcript to the CRM when the call ends.",
+      description: "Notify the CRM when the call ends.",
       url: `${base}/api/webhooks/slng/call-end`,
-      parameters: { type: "object", properties: {} },
+      // Every system argument below MUST also be declared here, or SLNG rejects
+      // the webhook ("invalid_arguments: unexpected argument(s) ...") and never
+      // POSTs. We send only simple string args — the typed transcript_messages
+      // argument repeatedly failed SLNG's schema validation, and the transcript
+      // isn't needed for the write-back (stage / agent_status / meeting_time).
+      parameters: {
+        type: "object",
+        properties: {
+          call_id: { type: "string" },
+          phone_number: { type: "string" },
+          call_end_reason: { type: "string" },
+        },
+        required: ["call_id", "phone_number"],
+      },
+      auth: { type: "bearer", token: opts.webhookSecret },
+      // "raw" → body is the flat { call_id, phone_number, ... } the route reads.
+      webhook_format: "raw",
       source: "system",
       wait_for_response: false,
       system: {
@@ -108,12 +128,6 @@ export function buildAutoCloserAgent(
           { name: "call_id", type: "string", required: true, source: { type: "call_id" } },
           { name: "phone_number", type: "string", required: true, source: { type: "phone_number" } },
           { name: "call_end_reason", type: "string", source: { type: "call_end_reason" } },
-          {
-            name: "transcript",
-            type: "transcript_messages",
-            required: true,
-            source: { type: "transcript_messages", max_messages: 200 },
-          },
         ],
       },
     },
