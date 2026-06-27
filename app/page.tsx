@@ -81,6 +81,16 @@ export default function Dashboard() {
   const deals = data?.deals ?? [];
   const nextId = data?.next_pick_record_id ?? null;
 
+  // Derive (don't store) whether the "Calling…" banner should still show: hide it
+  // once the dispatched deal flips to "done" — call_end has written the outcome
+  // back to Attio and the table row now reflects it.
+  const callFinished =
+    result?.status === "dispatched" &&
+    deals.some(
+      (d) => d.recordId === result.deal.recordId && d.agentStatus === "done",
+    );
+  const visibleResult = callFinished ? null : result;
+
   return (
     <main className="min-h-screen w-full bg-[#fafafa] px-6 py-10 text-zinc-900">
       <div className="mx-auto max-w-5xl">
@@ -111,7 +121,7 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {result && <ResultBanner result={result} />}
+        {visibleResult && <ResultBanner result={visibleResult} />}
 
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
           <table className="w-full text-left text-sm">
