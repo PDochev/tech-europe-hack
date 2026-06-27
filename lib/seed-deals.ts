@@ -36,7 +36,7 @@ export const SEED_DEALS = [
   {
     name: "Nimbus Logistics - expansion",
     stage: STAGES.new,
-    contact_name: "Priya Nair",
+    contact_name: "John Smith",
     contact_phone: "+447700900125",
     company_name: "Nimbus Logistics",
     agent_status: AGENT_STATUS.idle,
@@ -58,7 +58,7 @@ export const SEED_DEALS = [
   {
     name: "Vertex Manufacturing - new inbound",
     stage: STAGES.new,
-    contact_name: "Sofia Rossi",
+    contact_name: "George Rusell",
     contact_phone: "+447700900127",
     company_name: "Vertex Manufacturing",
     agent_status: AGENT_STATUS.idle,
