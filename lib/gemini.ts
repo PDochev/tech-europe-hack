@@ -9,7 +9,11 @@ const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 export class GeminiError extends Error {
-  constructor(message: string, readonly status: number, readonly body: unknown) {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: unknown,
+  ) {
     super(message);
     this.name = "GeminiError";
   }
@@ -17,7 +21,8 @@ export class GeminiError extends Error {
 
 function apiKey(): string {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY is not set. See README → Gemini setup.");
+  if (!key)
+    throw new Error("GEMINI_API_KEY is not set. See README → Gemini setup.");
   return key;
 }
 
@@ -26,21 +31,18 @@ export async function generateText(
   prompt: string,
   opts: { system?: string; temperature?: number } = {},
 ): Promise<string> {
-  const res = await fetch(
-    `${BASE}/models/${MODEL}:generateContent`,
-    {
-      method: "POST",
-      // Key in a header, not the URL query string (avoids leaking it into logs).
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey() },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        ...(opts.system
-          ? { systemInstruction: { parts: [{ text: opts.system }] } }
-          : {}),
-        generationConfig: { temperature: opts.temperature ?? 0.7 },
-      }),
-    },
-  );
+  const res = await fetch(`${BASE}/models/${MODEL}:generateContent`, {
+    method: "POST",
+    // Key in a header, not the URL query string (avoids leaking it into logs).
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey() },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      ...(opts.system
+        ? { systemInstruction: { parts: [{ text: opts.system }] } }
+        : {}),
+      generationConfig: { temperature: opts.temperature ?? 0.7 },
+    }),
+  });
 
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
