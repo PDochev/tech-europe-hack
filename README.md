@@ -3,8 +3,8 @@
 An agentic CRM build for the **Attio "Agentic CRM"** hackathon track. AutoCloser is an autonomous
 agent that, on a schedule or a button press, picks the highest-priority lead/deal in **Attio**,
 has **Gemini** decide who to call and draft a script, places a **live phone call** through **SLNG**,
-books a meeting, and writes the outcome back to Attio — with no human in the loop. The whole loop is
-orchestrated in **n8n**, and a thin **Next.js** dashboard shows it happening live via **Supabase** realtime.
+books a meeting, and writes the outcome back to Attio — with no human in the loop. A thin **Next.js**
+dashboard shows it happening live.
 
 > **North star:** can the agent close a deal without a human in the loop?
 
@@ -14,29 +14,34 @@ orchestrated in **n8n**, and a thin **Next.js** dashboard shows it happening liv
                  ┌──────────── Attio (system of record) ────────────┐
                  │  People/Companies · Deals · Notes · Activities    │
                  └─────────▲──────────────────────────────▲─────────┘
-                  (2) fetch │                  (7) write back│
-   schedule/webhook ──► n8n autonomous loop ───────────────┘
-                          │  (3)Gemini prioritize  (4)Gemini draft  (5)SLNG call  (6)Gemini summarize
-                          └──► run-state rows ──► Supabase ──realtime──► Next.js dashboard
+                  (2) fetch │                  (6) write back│
+   schedule/button ──► Next.js agent loop ──────────────────┘
+                          │  (3) Gemini prioritize + draft   (4) SLNG call   (5) Gemini summarize
+                          └──► call run-state ──► Neon (Postgres)
 ```
+
+The loop runs inside the Next.js app (`lib/orchestrator.ts`, exposed at `POST /api/agent/run`). SLNG's
+in-call `book_meeting` and end-of-call `call_end` webhooks post back to the app, which correlates them
+via a small Neon table and writes the outcome to Attio.
 
 ## Partner technologies
 
-| Service                                           | Role in AutoCloser                           | Side challenge |
-| ------------------------------------------------- | -------------------------------------------- | -------------- |
-| [Attio](https://attio.com)                        | CRM, system of record, write-back target     | Track prize    |
-| [SLNG](https://slng.ai)                           | Outbound voice call to the lead              | LEGO           |
-| [n8n](https://n8n.io)                             | Autonomous loop, scheduling, webhook trigger | 1yr Pro + $500 |
-| [Gemini / Google DeepMind](https://ai.google.dev) | Prioritize, decide, draft script, summarize  | —              |
+| Service                                           | Role in AutoCloser                          | Side challenge |
+| ------------------------------------------------- | ------------------------------------------- | -------------- |
+| [Attio](https://attio.com)                        | CRM, system of record, write-back target    | Track prize    |
+| [SLNG](https://slng.ai)                           | Outbound voice call to the lead             | LEGO           |
+| [Gemini / Google DeepMind](https://ai.google.dev) | Prioritize, decide, draft script, summarize | —              |
 
-Supabase is used as infrastructure (live run-state store), not as a judged partner tech.
+[Neon](https://neon.tech) (Postgres) is used as infrastructure — it stores call run-state so the
+`dispatch → book_meeting → call_end` webhooks (three separate requests) correlate to the right deal.
+Not a judged partner tech.
 
 ---
 
 ## Where to register & get API keys
 
-You need accounts and keys for **five** services. Budget ~20 minutes total. Put every value into a
-local `.env` file (copy from `.env.example`).
+You need accounts and keys for the three partner services (**Attio**, **SLNG**, **Gemini**) plus a
+**Neon** database. Budget ~15 minutes. Put every value into a local `.env.local` (copy from `.env.example`).
 
 ### 1. Attio (CRM)
 
@@ -55,11 +60,10 @@ local `.env` file (copy from `.env.example`).
 
 1. Sign up at **https://slng.ai** (generous free tier).
 2. Open the dashboard → **API Keys**: **https://app.slng.ai/api-keys** and create a key.
-3. Set `SLNG_API_KEY`. Auth is `Authorization: Bearer <key>`; base URL `https://api.slng.ai/v1/`.
+3. Set `SLNG_API_KEY`. Auth is `Authorization: Bearer <key>`.
 4. **BYOK note:** SLNG is bring-your-own-key by default — it routes through your own STT/TTS/LLM
-   providers (OpenAI, Anthropic, Deepgram, ElevenLabs, etc.). If your call flow needs one, add the
-   relevant provider key in the SLNG dashboard and/or as an env var. Confirm the exact outbound-call
-   endpoint and any telephony number setup in the docs.
+   providers. If your call flow needs one, add the relevant provider key in the SLNG dashboard.
+   Set up an outbound SIP trunk / number under **Telephony** and copy its id into `SLNG_OUTBOUND_TRUNK_ID`.
    - Docs: https://docs.slng.ai
 
 ### 3. Gemini (Google DeepMind)
@@ -68,56 +72,41 @@ local `.env` file (copy from `.env.example`).
 2. Click **Get API key** → **Create API key** (in a new or existing Google Cloud project).
 3. Set `GEMINI_API_KEY`. Use model `gemini-2.5-pro` (or `gemini-2.5-flash` for cheaper/faster steps).
    - Docs: https://ai.google.dev/gemini-api/docs
-   - (Alternative: Vertex AI on Google Cloud if you prefer enterprise auth — not needed for the hackathon.)
 
-### 4. n8n (orchestration)
+### 4. Neon (Postgres run-state)
 
-Pick one:
-
-- **n8n Cloud (fastest):** sign up at **https://n8n.io** → start a cloud trial → your instance lives
-  at `https://<your-workspace>.app.n8n.cloud`.
-- **Self-host (free, local):** `npx n8n` or `docker run -it --rm -p 5678:5678 n8nio/n8n`, then open
-  `http://localhost:5678`.
-
-In n8n you don't use a single global key — instead you add **Credentials** per node (HTTP Header Auth
-for Attio/SLNG, a Google/Gemini credential for the AI node). To let the dashboard trigger a run, the
-workflow's **Webhook** node exposes a URL — copy it into `N8N_WEBHOOK_URL`. Optionally create an n8n
-**API key** (Settings → n8n API) if the dashboard reads execution status; set `N8N_API_KEY`.
-
-- Docs: https://docs.n8n.io
-
-### 5. Supabase (live run-state)
-
-1. Sign up at **https://supabase.com** → **New project** (free tier). Save the DB password.
-2. Go to **Project Settings → API** to find:
-   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   - **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY` (used by the browser dashboard)
-   - **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (used by n8n to write run-state; **server-only, never ship to the browser**)
-3. Create tables `runs` and `run_steps` (SQL provided in `supabase/schema.sql` once added) and enable
-   **Realtime** for both under Database → Replication.
-   - Docs: https://supabase.com/docs
+1. Sign up at **https://neon.tech** → **New project** (free tier).
+2. From the project dashboard → **Connection Details**, copy the **pooled** connection string.
+3. Set `DATABASE_URL`, then create the table:
+   ```bash
+   set -a && source .env.local && set +a && npx tsx scripts/setup-neon.ts
+   ```
+   Idempotent — it creates the `ac_calls` table that backs `lib/call-store.ts`.
+   - Docs: https://neon.tech/docs
 
 ---
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` (Next.js) and fill in the values. n8n credentials are configured
-inside the n8n UI, but keep the same secrets handy there.
+Copy `.env.example` to `.env.local` and fill in the values.
 
 ```bash
 cp .env.example .env.local
 ```
 
-| Variable                        | Used by            | Where to get it                          |
-| ------------------------------- | ------------------ | ---------------------------------------- |
-| `ATTIO_API_KEY`                 | n8n                | Attio → Workspace settings → Developers  |
-| `SLNG_API_KEY`                  | n8n                | app.slng.ai/api-keys                     |
-| `GEMINI_API_KEY`                | n8n                | aistudio.google.com → Get API key        |
-| `N8N_WEBHOOK_URL`               | Next.js dashboard  | n8n Webhook node URL                     |
-| `N8N_API_KEY`                   | Next.js (optional) | n8n → Settings → n8n API                 |
-| `NEXT_PUBLIC_SUPABASE_URL`      | Next.js + n8n      | Supabase → Settings → API                |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Next.js (browser)  | Supabase → Settings → API (anon)         |
-| `SUPABASE_SERVICE_ROLE_KEY`     | n8n (server)       | Supabase → Settings → API (service_role) |
+| Variable                 | Where to get it                                     |
+| ------------------------ | --------------------------------------------------- |
+| `ATTIO_API_KEY`          | Attio → Workspace settings → Developers             |
+| `SLNG_API_KEY`           | app.slng.ai/api-keys                                |
+| `SLNG_AGENT_ID`          | printed by `scripts/provision-slng-agent.ts`        |
+| `SLNG_OUTBOUND_TRUNK_ID` | SLNG → Telephony                                    |
+| `SLNG_WEBHOOK_SECRET`    | you choose — bearer SLNG sends to our webhooks      |
+| `AGENT_WEBHOOK_BASE_URL` | your public https URL (ngrok in dev, prod URL live) |
+| `DISPATCH_API_KEY`       | you choose — gates `/api/agent/run` and `/dispatch` |
+| `GEMINI_API_KEY`         | aistudio.google.com → Get API key                   |
+| `DATABASE_URL`           | Neon → Connection Details (pooled)                  |
+
+See `.env.example` for the full list, including optional STT/TTS/voice/model overrides.
 
 ---
 
@@ -133,21 +122,19 @@ npm run build    # production build
 npm run lint     # eslint (flat config)
 ```
 
-The n8n workflow runs separately (cloud or `http://localhost:5678`). Import the workflow JSON (added
-under `n8n/` during the build), wire up the credentials above, and copy the webhook URL into your env.
-
 ## Voice agent (SLNG): provision & place a call
 
 The calling agent lives in `lib/` and `app/api/`:
 
-| File                                 | Purpose                                                                                               |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `lib/slng.ts`                        | Typed client for the SLNG Voice Agents API (create/replace agent, dispatch call, get call)            |
-| `lib/autocloser-agent.ts`            | The AutoCloser agent definition — system prompt + `book_meeting` tool + `call_end` transcript webhook |
-| `scripts/provision-slng-agent.ts`    | Creates/updates the agent in SLNG                                                                     |
-| `app/api/agent/dispatch`             | POST → dispatch an outbound call                                                                      |
-| `app/api/webhooks/slng/book-meeting` | The in-call LLM calls this when it secures a meeting                                                  |
-| `app/api/webhooks/slng/call-end`     | SLNG posts the transcript here when the call ends (write-back point)                                  |
+| File                                 | Purpose                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `lib/slng.ts`                        | Typed client for the SLNG Voice Agents API (create/replace agent, dispatch call, get call)        |
+| `lib/autocloser-agent.ts`            | The AutoCloser agent definition — system prompt + `book_meeting` tool + `call_end` system webhook |
+| `lib/call-store.ts`                  | Correlates `call_id` → Attio record + booked meeting, in Neon (`ac_calls`)                        |
+| `scripts/provision-slng-agent.ts`    | Creates/updates the agent in SLNG                                                                 |
+| `app/api/agent/dispatch`             | POST → dispatch an outbound call                                                                  |
+| `app/api/webhooks/slng/book-meeting` | The in-call LLM calls this when it secures a meeting                                              |
+| `app/api/webhooks/slng/call-end`     | SLNG posts here when the call ends → write-back to Attio                                          |
 
 **1. Configure telephony.** In the SLNG dashboard → Telephony, set up an outbound SIP trunk /
 phone number and copy the trunk id into `SLNG_OUTBOUND_TRUNK_ID`.
@@ -166,7 +153,8 @@ npx tsx scripts/provision-slng-agent.ts       # prints the agent id
 # re-run with SLNG_AGENT_ID=<id> to update an existing agent
 ```
 
-Put the printed id in `SLNG_AGENT_ID`.
+Put the printed id in `SLNG_AGENT_ID`. **Re-run this whenever you change `lib/autocloser-agent.ts`** —
+the agent's webhook/tool config only updates in SLNG when you re-provision.
 
 **4. Place a call** (rings the number; the agent qualifies and books a meeting):
 
@@ -184,12 +172,13 @@ curl -X POST http://localhost:3000/api/agent/dispatch \
 ```
 
 `deal_summary` / `talking_points` feed the agent's prompt (Gemini can generate these per lead).
-When the prospect agrees a slot the agent calls `book_meeting`; when the call ends, `call_end`
-delivers the transcript. Write-back to Attio is stubbed (`writeOutcomeToAttio`) pending that step.
+When the prospect agrees a slot the agent calls `book_meeting`; when the call ends, `call_end` writes
+the outcome back to Attio — stage → **Meeting Booked**, `agent_status: done`, `meeting_time` set, and
+a summary note attached.
 
 ## Orchestration endpoints
 
-The agent loop is exposed as HTTP so both the dashboard and n8n can drive it:
+The agent loop is exposed as HTTP so the dashboard or any scheduler (cron, Vercel Cron, etc.) can drive it:
 
 | Endpoint                    | Auth                      | Purpose                                                                                 |
 | --------------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
@@ -200,22 +189,19 @@ The agent loop is exposed as HTTP so both the dashboard and n8n can drive it:
 `POST /api/agent/run` accepts an optional body: `{ "record_id": "...", "phone_override": "+44...", "talking_points": "..." }`.
 Use `phone_override` to route the demo call to a real (teammate) phone while keeping the deal's context.
 
-## Run the autonomous loop (ngrok + n8n Cloud)
+## Run the autonomous loop
 
-n8n Cloud can't reach `localhost`, and SLNG must reach your webhooks — so expose the app with a tunnel.
+SLNG must reach your webhooks, so in dev expose the app with a tunnel; then fire `/api/agent/run` on a
+schedule (cron, Vercel Cron, GitHub Actions, or just repeated `curl`).
 
 1. **Seed Attio** (once): `npx tsx scripts/setup-attio.ts`.
-2. **Env** (`.env.local`): set `SLNG_AGENT_ID`, `SLNG_OUTBOUND_TRUNK_ID`, `SLNG_WEBHOOK_SECRET`,
-   `DISPATCH_API_KEY`, and `AGENT_WEBHOOK_BASE_URL` (your ngrok https URL).
-3. **Tunnel:** `ngrok http 3000` → copy the https URL.
-4. **Provision the SLNG agent** so its `book_meeting`/`call_end` webhooks hit the tunnel:
+2. **Set up Neon** (once): `npx tsx scripts/setup-neon.ts`.
+3. **Env** (`.env.local`): set `SLNG_AGENT_ID`, `SLNG_OUTBOUND_TRUNK_ID`, `SLNG_WEBHOOK_SECRET`,
+   `DISPATCH_API_KEY`, `DATABASE_URL`, and `AGENT_WEBHOOK_BASE_URL` (your ngrok https URL).
+4. **Tunnel:** `ngrok http 3000` → copy the https URL.
+5. **Provision the SLNG agent** so its `book_meeting`/`call_end` webhooks hit the tunnel:
    `AGENT_WEBHOOK_BASE_URL=https://<ngrok> npx tsx scripts/provision-slng-agent.ts` → set `SLNG_AGENT_ID`.
-5. **n8n Cloud:** import `n8n/autocloser-loop.json`. It's a Schedule → HTTP Request workflow.
-   Edit the HTTP node: set the URL to `https://<ngrok>/api/agent/run` and the `Authorization` header to
-   `Bearer <DISPATCH_API_KEY>`. Activate it for the autonomous loop, or hit **Execute Workflow** to fire once.
-   > Note: the SLNG community node (`n8n-nodes-slng`) only works on **self-hosted** n8n, not Cloud — so we
-   > call SLNG via our app over HTTP instead.
-6. **Fire a cycle manually** (same thing n8n does):
+6. **Fire a cycle:**
    ```bash
    curl -X POST https://<ngrok>/api/agent/run \
      -H "authorization: Bearer $DISPATCH_API_KEY" \
@@ -223,6 +209,7 @@ n8n Cloud can't reach `localhost`, and SLNG must reach your webhooks — so expo
      -d '{"phone_override":"+44YOURPHONE"}'
    ```
    The agent calls, books a meeting, and the `call_end` webhook advances the deal in Attio.
+   For a recurring loop, hit that endpoint on a timer.
 
 ## Demo flow
 
@@ -247,8 +234,3 @@ in the `ac_deals` object (and their notes) before re-seeding, so only run it aga
 
 To also clear the call run-state, run `DELETE FROM ac_calls;` in the Neon SQL editor (a fresh call
 otherwise just adds a new row).
-
-## Status
-
-Early hackathon build. Setup/registration is documented above; the n8n workflow, Supabase schema, and
-dashboard are in progress per the plan.
