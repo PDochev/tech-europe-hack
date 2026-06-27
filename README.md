@@ -35,41 +35,28 @@ via a small Neon table and writes the outcome to Attio.
 
 [Neon](https://neon.tech) (Postgres) is used as infrastructure — it stores call run-state so the
 `dispatch → book_meeting → call_end` webhooks (three separate requests) correlate to the right deal.
-
-> **Attio track fit.** AutoCloser is the _Proactive Relationship Agent_ direction: it monitors pipeline
-> staleness, decides who needs attention, acts (a live call), and logs the outcome back to Attio —
-> the autonomous loop, no human in the loop. The north star ("close a deal without a human in the
-> loop") is the literal flow: stale deal → booked meeting on the calendar, written to the CRM by the agent.
+[Twilio](https://twilio.com) supplies the outbound phone number, wired into SLNG's telephony as the
+caller ID. Both are infrastructure (not judged partner tech) and have no code in the repo.
 
 ## What we used from each platform
 
-Maps every external capability the project relies on (for jury evaluation).
-
-### Attio — via the **REST API (v2)** · `lib/attio.ts`, `lib/deal.ts`
+### Attio - via the **REST API (v2)** · `lib/attio.ts`, `lib/deal.ts`
 
 - **Objects & attributes (schema as code):** creates a custom `ac_deals` object and its attributes
   (`stage`, `contact_name`, `contact_phone`, `company_name`, `agent_status`, `last_call_outcome`,
-  `next_step`, `meeting_time`, `last_activity`) — `createObject` / `createAttribute` (`scripts/setup-attio.ts`).
+  `next_step`, `meeting_time`, `last_activity`) - `createObject` / `createAttribute` (`scripts/setup-attio.ts`).
 - **Records:** `createRecord` (seed deals), `queryRecords` (pipeline, stalest-first via
   `listDealsByStaleness` / `pickNextDeal`), `updateRecord` (mark `calling`, then write the outcome:
   stage → **Meeting Booked**, `agent_status: done`, `meeting_time`), `deleteRecord` (test reset).
-- **Notes:** `createNote` — attaches the Gemini call summary + transcript to the deal.
-- **Auth:** `Authorization: Bearer ATTIO_API_KEY`; base `https://api.attio.com/v2/`.
-
-> **Why the REST API (not Attio MCP or Workflows)?** AutoCloser runs fully **headless** on its own
-> schedule, outside any user session or in-app surface — so it needs direct programmatic control of the
-> entire loop (define the schema, query the pipeline, write back records + notes) from our own
-> orchestrator. The REST API gives exactly that with nothing else in the path. Attio MCP and Workflows
-> are the right entry points when a human or an in-Attio agent drives the action; our model is the
-> opposite — no human in the loop — so the REST API is the cleanest fit.
+- **Notes:** `createNote` - attaches the Gemini call summary + transcript to the deal.
 
 ### SLNG — **Voice Agents API** · `lib/slng.ts`, `lib/autocloser-agent.ts`
 
 - **Agent lifecycle:** `createAgent` / `replaceAgent` / `getAgent` (`/agents`), `dispatchCall`
-  (`/agents/{id}/calls`), `getCall` (transcript, tool executions, status — also our debugging window).
+  (`/agents/{id}/calls`), `getCall` (transcript, tool executions, status).
 - **In-call stack (configurable):** Deepgram Nova STT, Deepgram Aura TTS, Groq GPT-OSS-120B LLM.
 - **Agent tools:** built-in `current_datetime`, template `hangup`, an LLM-invoked **`book_meeting`**
-  webhook, and a system-triggered **`call_end`** webhook (event `call_end`) — both bearer-authed with
+  webhook, and a system-triggered **`call_end`** webhook (event `call_end`) - both bearer-authed with
   `webhook_format: raw`.
 - **Per-call personalization:** Handlebars template variables (`contact_name`, `company_name`,
   `deal_summary`, `talking_points`) injected at dispatch.
@@ -87,55 +74,14 @@ Maps every external capability the project relies on (for jury evaluation).
 - Postgres `ac_calls` table correlating the `dispatch → book_meeting → call_end` webhooks to the right
   Attio deal and the booked slot. Accessed via the `@neondatabase/serverless` HTTP driver.
 
----
+### Twilio (infrastructure) — telephony number
 
-## Where to register & get API keys
-
-You need accounts and keys for the three partner services (**Attio**, **SLNG**, **Gemini**) plus a
-**Neon** database. Budget ~15 minutes. Put every value into a local `.env.local` (copy from `.env.example`).
-
-### 1. Attio (CRM)
-
-1. Sign up / sign in at **https://app.attio.com** (free workspace; one is provided at the event).
-2. You must be a **workspace admin** to create a key.
-3. From the dropdown beside your workspace name → **Workspace settings** → **Developers** tab.
-4. Click **+ New access token**, name it (e.g. `autocloser`), and grant **read-write** on:
-   **Object configuration** (create the deal object + attributes), **Record permissions /
-   Records** (create + update deals), and **Notes** (attach call notes). Reads are implied.
-   Missing `object_configuration:read-write` is the usual cause of a `403 unauthorized` on setup.
-5. Click the token to copy it. Tokens don't expire.
-6. Set `ATTIO_API_KEY`. Auth is `Authorization: Bearer <token>`; base URL `https://api.attio.com/v2/`.
-   - Docs: https://docs.attio.com/rest-api/overview · Key guide: https://attio.com/help/apps/other-apps/generating-an-api-key
-
-### 2. SLNG (voice AI)
-
-1. Sign up at **https://slng.ai** (generous free tier).
-2. Open the dashboard → **API Keys**: **https://app.slng.ai/api-keys** and create a key.
-3. Set `SLNG_API_KEY`. Auth is `Authorization: Bearer <key>`.
-4. **BYOK note:** SLNG is bring-your-own-key by default — it routes through your own STT/TTS/LLM
-   providers. If your call flow needs one, add the relevant provider key in the SLNG dashboard.
-   Set up an outbound SIP trunk / number under **Telephony** and copy its id into `SLNG_OUTBOUND_TRUNK_ID`.
-   - Docs: https://docs.slng.ai
-
-### 3. Gemini (Google DeepMind)
-
-1. Go to **Google AI Studio**: **https://aistudio.google.com** and sign in with a Google account.
-2. Click **Get API key** → **Create API key** (in a new or existing Google Cloud project).
-3. Set `GEMINI_API_KEY`. Use model `gemini-2.5-pro` (or `gemini-2.5-flash` for cheaper/faster steps).
-   - Docs: https://ai.google.dev/gemini-api/docs
-
-### 4. Neon (Postgres run-state)
-
-1. Sign up at **https://neon.tech** → **New project** (free tier).
-2. From the project dashboard → **Connection Details**, copy the **pooled** connection string.
-3. Set `DATABASE_URL`, then create the table:
-   ```bash
-   set -a && source .env.local && set +a && npx tsx scripts/setup-neon.ts
-   ```
-   Idempotent — it creates the `ac_calls` table that backs `lib/call-store.ts`.
-   - Docs: https://neon.tech/docs
-
----
+- Provides the outbound **phone number** purchased in the Twilio console. It's connected to SLNG's
+  telephony (outbound SIP trunk) so SLNG places real PSTN calls from it — the number SLNG dials _from_.
+  Configured once in the SLNG/Twilio dashboards; there's no Twilio code or API key in this repo.
+- **Trial-account caveat:** on a Twilio trial you can only call numbers you've added as **Verified
+  Caller IDs**. Add the destination phone (e.g. your own/teammate's number for the demo) under
+  Twilio console → **Phone Numbers → Manage → Verified Caller IDs**, or calls will be rejected.
 
 ## Environment variables
 
@@ -149,7 +95,7 @@ cp .env.example .env.local
 | ------------------------ | --------------------------------------------------- |
 | `ATTIO_API_KEY`          | Attio → Workspace settings → Developers             |
 | `SLNG_API_KEY`           | app.slng.ai/api-keys                                |
-| `SLNG_AGENT_ID`          | printed by `scripts/provision-slng-agent.ts`        |
+| `SLNG_AGENT_ID`          | create an agent att app.slng.ai/agent-infra/new     |
 | `SLNG_OUTBOUND_TRUNK_ID` | SLNG → Telephony                                    |
 | `SLNG_WEBHOOK_SECRET`    | you choose — bearer SLNG sends to our webhooks      |
 | `AGENT_WEBHOOK_BASE_URL` | your public https URL (ngrok in dev, prod URL live) |
@@ -163,8 +109,7 @@ See `.env.example` for the full list, including optional STT/TTS/voice/model ove
 
 ## Local development
 
-This repo is a Next.js 16 app (App Router, React 19, Tailwind v4). See `AGENTS.md` — read
-`node_modules/next/dist/docs/` before writing framework code, as these versions have breaking changes.
+This repo is a Next.js 16 app (App Router, React 19, Tailwind v4).
 
 ```bash
 npm install
@@ -187,40 +132,14 @@ The calling agent lives in `lib/` and `app/api/`:
 | `app/api/webhooks/slng/book-meeting` | The in-call LLM calls this when it secures a meeting                                              |
 | `app/api/webhooks/slng/call-end`     | SLNG posts here when the call ends → write-back to Attio                                          |
 
-**1. Configure telephony.** In the SLNG dashboard → Telephony, set up an outbound SIP trunk /
-phone number and copy the trunk id into `SLNG_OUTBOUND_TRUNK_ID`.
+**1. Configure telephony.** Purchase a phone number in the [Twilio](https://twilio.com) console, then in
+the SLNG dashboard → Telephony connect it as an outbound SIP trunk and copy the trunk id into
+`SLNG_OUTBOUND_TRUNK_ID`. This Twilio number is the caller ID SLNG dials _from_.
+On a Twilio **trial** account you must also add the number you want to call as a **Verified Caller ID**
+(Twilio console → Phone Numbers → Manage → Verified Caller IDs) — otherwise the call is rejected.
 
 **2. Expose your webhooks.** SLNG must reach `book_meeting` / `call_end` over the public internet.
 In dev, tunnel your app: `ngrok http 3000`, then set `AGENT_WEBHOOK_BASE_URL` to the https URL.
-
-**3. Provision the agent:**
-
-```bash
-export SLNG_API_KEY=...                       # app.slng.ai/api-keys
-export AGENT_WEBHOOK_BASE_URL=https://<ngrok>.ngrok.app
-export SLNG_WEBHOOK_SECRET=some-shared-secret
-export SLNG_OUTBOUND_TRUNK_ID=...             # from the telephony dashboard
-npx tsx scripts/provision-slng-agent.ts       # prints the agent id
-# re-run with SLNG_AGENT_ID=<id> to update an existing agent
-```
-
-Put the printed id in `SLNG_AGENT_ID`. **Re-run this whenever you change `lib/autocloser-agent.ts`** —
-the agent's webhook/tool config only updates in SLNG when you re-provision.
-
-**4. Place a call** (rings the number; the agent qualifies and books a meeting):
-
-```bash
-curl -X POST http://localhost:3000/api/agent/dispatch \
-  -H 'content-type: application/json' \
-  -H "authorization: Bearer $DISPATCH_API_KEY" \
-  -d '{
-    "phone_number": "+447700900123",
-    "contact_name": "Maria",
-    "company_name": "Greenfield",
-    "deal_summary": "Trialled us in Q1, went quiet after the pricing call.",
-    "talking_points": "Re-engage on the new usage-based plan; ask who owns the budget."
-  }'
-```
 
 `deal_summary` / `talking_points` feed the agent's prompt (Gemini can generate these per lead).
 When the prospect agrees a slot the agent calls `book_meeting`; when the call ends, `call_end` writes
