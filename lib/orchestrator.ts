@@ -1,12 +1,16 @@
 /**
  * One autonomous agent cycle, shared by the auth-gated /api/agent/run endpoint
- * (n8n / external) and the same-origin dashboard trigger.
  *
  * Returns a typed result instead of an HTTP Response so callers can decide how
  * to surface it.
  */
 import { AttioError, DEALS_OBJECT, updateRecord } from "./attio";
-import { dealSummary, listDealsByStaleness, pickNextDeal, type Deal } from "./deal";
+import {
+  dealSummary,
+  listDealsByStaleness,
+  pickNextDeal,
+  type Deal,
+} from "./deal";
 import { generateTalkingPoints } from "./agent-brain";
 import { AGENT_STATUS } from "./deal-schema";
 import { dispatchCall, SlngError } from "./slng";
@@ -20,7 +24,13 @@ export interface RunOptions {
 }
 
 export type RunResult =
-  | { status: "dispatched"; httpStatus: 200; callId: string; deal: { recordId: string; name: string; phone: string }; talkingPoints: string }
+  | {
+      status: "dispatched";
+      httpStatus: 200;
+      callId: string;
+      deal: { recordId: string; name: string; phone: string };
+      talkingPoints: string;
+    }
   | { status: "idle"; httpStatus: 200; reason: string }
   | { status: "error"; httpStatus: number; error: string; detail?: unknown };
 
@@ -30,7 +40,8 @@ export async function runAgentCycle(opts: RunOptions = {}): Promise<RunResult> {
     return {
       status: "error",
       httpStatus: 500,
-      error: "SLNG_AGENT_ID is not set. Run scripts/provision-slng-agent.ts first.",
+      error:
+        "SLNG_AGENT_ID is not set. Run scripts/provision-slng-agent.ts first.",
     };
   }
 
@@ -63,7 +74,11 @@ export async function runAgentCycle(opts: RunOptions = {}): Promise<RunResult> {
     };
   }
   if (!destinationAllowed(phone)) {
-    return { status: "error", httpStatus: 403, error: "destination not in ALLOWED_CALL_PREFIXES" };
+    return {
+      status: "error",
+      httpStatus: 403,
+      error: "destination not in ALLOWED_CALL_PREFIXES",
+    };
   }
 
   // Mark the deal as mid-call so the loop won't pick it again (best-effort).
@@ -77,7 +92,8 @@ export async function runAgentCycle(opts: RunOptions = {}): Promise<RunResult> {
   }
 
   // Gemini drafts the talking points (best-effort; falls back internally).
-  const talkingPoints = opts.talkingPoints || (await generateTalkingPoints(deal));
+  const talkingPoints =
+    opts.talkingPoints || (await generateTalkingPoints(deal));
 
   try {
     const result = await dispatchCall(agentId, {
