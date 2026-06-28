@@ -2,8 +2,7 @@
 
 /**
  * Server Action for the dashboard "Run agent" button. Runs server-side so the
- * dispatch credentials never reach the browser. The hardened public entry point
- * for n8n remains POST /api/agent/run (Bearer DISPATCH_API_KEY).
+ * dispatch credentials never reach the browser.
  */
 import { runAgentCycle, type RunResult } from "@/lib/orchestrator";
 
